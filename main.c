@@ -4,6 +4,22 @@
 
 #define MAX_STATUS_LENGTH	256
 
+#define EASY_MAX_BUTTONS	4
+#define NORMAL_MAX_BUTTONS	8
+#define HARD_MAX_BUTTONS	12
+
+
+const int difficultyMaxButtons[3] = {EASY_MAX_BUTTONS, NORMAL_MAX_BUTTONS, HARD_MAX_BUTTONS};
+
+typedef struct
+{
+	GtkWidget *button;
+	int currentX;
+	int currentY;
+	int originalX;
+	int originalY;
+} puzzleButton;
+
 typedef struct
 {
 	GtkApplication *app;
@@ -11,6 +27,11 @@ typedef struct
 	GtkWidget *statusBar;
 	guint statusID;
 	guint difficulty;
+	GtkWidget *grid;
+	puzzleButton *puzzleButtons[HARD_MAX_BUTTONS][HARD_MAX_BUTTONS];
+	puzzleButton *firstButton;
+	puzzleButton *secondButton;
+	bool firstButtonClicked;
 } widgets;
 
 widgets *w = NULL;
@@ -178,10 +199,9 @@ void createMenu(GtkWidget *box)
 
 void createGrid(GtkWidget *box)
 {
-	GtkWidget *grid;
-	grid = gtk_grid_new();
+	w->grid = gtk_grid_new();
 
-	GtkWidget *label_output1;
+	/*GtkWidget *label_output1;
 	label_output1 = gtk_label_new ("=== 1 ===");
 
 	GtkWidget *label_output2;
@@ -193,7 +213,12 @@ void createGrid(GtkWidget *box)
 	gtk_grid_attach(GTK_GRID(grid), label_output2, 1, 1, 1, 1);
 	gtk_grid_attach(GTK_GRID(grid), label_output3, 2, 2, 1, 1);
 
-	gtk_box_pack_start(GTK_BOX(box), grid, true, true, 0);
+	*/
+	// Make all cells same width and height
+	gtk_grid_set_column_homogeneous(w->grid, true);
+	gtk_grid_set_row_homogeneous(w->grid, true);
+
+	gtk_box_pack_start(GTK_BOX(box), w->grid, true, true, 0);
 }
 
 void createStatusBar(GtkWidget *box)
@@ -204,26 +229,111 @@ void createStatusBar(GtkWidget *box)
 	w->statusID = gtk_statusbar_get_context_id(GTK_STATUSBAR(w->statusBar), "status");
 }
 
+void setStatusBarText(gpointer *text)
+{
+	gtk_statusbar_pop(GTK_STATUSBAR(w->statusBar), w->statusID);
+	gtk_statusbar_push (GTK_STATUSBAR(w->statusBar), w->statusID, text);
+}
+
 void setStatusBar(int clicks, unsigned long time)
 {
 	gchar *msg = g_malloc(MAX_STATUS_LENGTH);
 
-	g_snprintf(msg, MAX_STATUS_LENGTH, "#Clicks: %d, Time needed: %lu", clicks, time);
-	gtk_statusbar_pop(GTK_STATUSBAR(w->statusBar), w->statusID);
-	gtk_statusbar_push (GTK_STATUSBAR(w->statusBar), w->statusID, msg);
+	g_snprintf(msg, MAX_STATUS_LENGTH, "Clicks: %d, Time needed: %lu", clicks, time);
+	setStatusBarText(msg);
+}
 
-	/*
-	if (strlen(text) <= MAX_STATUS_LENGTH)
+static void puzzleButtonClicked(GtkWidget *widget, gpointer data)
+{
+	puzzleButton *buttonStruct = (puzzleButton *)data;
+	//GtkButton    *button       = (GtkButton *)widget;
+
+	gchar *text = gtk_button_get_label(buttonStruct->button);
+
+	if (!w->firstButtonClicked)
 	{
-
-
+		// First button clicked
+		g_print("First button: %s\n", text);
+		w->firstButton = buttonStruct;
+		w->firstButtonClicked = true;
 	}
 	else
 	{
-		g_print("ERROR: Status text too long.\n\n");
-		g_application_quit(G_APPLICATION(w->app));
+		// Second button clickd
+		g_print("Second button: %s\n", text);
+
+		if (w->firstButton == buttonStruct)
+		{
+			g_print("WARNING: Cannot swap same button! :-?\n");
+			setStatusBarText("Cannot swap same button! Choose another one!");
+			return;
+		}
+
+		w->secondButton = buttonStruct;
+		w->firstButtonClicked = false;
+
+		g_print("First  button x = %d, y = %d\n", w->firstButton->currentX, w->firstButton->currentY);
+		g_print("Second button x = %d, y = %d\n\n", w->secondButton->currentX, w->secondButton->currentY);
+
+		// Increase the reference count
+		g_object_ref(w->firstButton->button);
+		g_object_ref(w->secondButton->button);
+
+		// Remove the buttons from the grid
+		gtk_container_remove(w->grid, w->firstButton->button);
+		gtk_container_remove(w->grid, w->secondButton->button);
+
+		// Swap currentX and currentY of the 2 buttons
+		int tempX = w->firstButton->currentX;
+		int tempY = w->firstButton->currentY;
+
+		w->firstButton->currentX = w->secondButton->currentX;
+		w->firstButton->currentY = w->secondButton->currentY;
+
+		w->secondButton->currentX = tempX;
+		w->secondButton->currentY = tempY;
+
+		// Attach button in reverse order to the grid
+		gtk_grid_attach(GTK_GRID(w->grid), w->firstButton->button, w->firstButton->currentX, w->firstButton->currentY, 1, 1);
+		gtk_grid_attach(GTK_GRID(w->grid), w->secondButton->button, w->secondButton->currentX, w->secondButton->currentY, 1, 1);
+
+		g_object_unref(w->firstButton->button);
+		g_object_unref(w->secondButton->button);
+
+		g_print("First  button x = %d, y = %d\n", w->firstButton->currentX, w->firstButton->currentY);
+		g_print("Second button x = %d, y = %d\n\n", w->secondButton->currentX, w->secondButton->currentY);
 	}
-	*/
+}
+
+void gameStart()
+{
+	int x = 0;
+	int y = 0;
+	int n = 1;
+
+	// Init a new game
+	w->firstButton = NULL;
+	w->secondButton = NULL;
+	w->firstButtonClicked = false;
+
+	for (y = 0; y < difficultyMaxButtons[w->difficulty]; y++)
+	{
+		for (x = 0; x < difficultyMaxButtons[w->difficulty]; x++)
+		{
+			char labelBuffer[8];
+			snprintf(labelBuffer, sizeof(labelBuffer), "%d", n);
+
+			w->puzzleButtons[x][y] = g_malloc(sizeof(puzzleButton));
+			w->puzzleButtons[x][y]->button = gtk_button_new_with_label(labelBuffer);
+			w->puzzleButtons[x][y]->currentX = x;
+			w->puzzleButtons[x][y]->currentY = y;
+
+			gtk_grid_attach(GTK_GRID(w->grid), w->puzzleButtons[x][y]->button, x, y, 1, 1);
+			g_signal_connect(w->puzzleButtons[x][y]->button, "clicked", G_CALLBACK(puzzleButtonClicked), w->puzzleButtons[x][y]);
+
+			n++;
+		}
+	}
 }
 
 // app activate callback - creates the window
@@ -254,7 +364,7 @@ static void activate(GtkApplication *app, gpointer data)
 
 	setStatusBar(w->difficulty, 0);
 
-
+	gameStart();
 
   //GtkWidget *clr_button, *ok_button;
 	/*
@@ -293,6 +403,8 @@ int main (int argc, char **argv)
 	int status;
 
 	w = g_malloc(sizeof(widgets));
+
+	g_print("Size: %d\n", sizeof(widgets));
 
 	w->difficulty = 1;
 
