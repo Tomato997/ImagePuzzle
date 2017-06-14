@@ -22,6 +22,7 @@ typedef struct
 {
 	GtkApplication *app;
 	GtkWidget *window;
+	GtkWidget *winDialog;
 	GtkWidget *statusBar;
 	guint statusID;
 	guint difficulty;
@@ -30,6 +31,8 @@ typedef struct
 	puzzleButton *firstButton;
 	puzzleButton *secondButton;
 	bool firstButtonClicked;
+	int clicks;
+	int timeNeeded;
 } widgets;
 
 widgets *w = NULL;
@@ -112,6 +115,23 @@ void menuAboutCallback(GSimpleAction *action, GVariant *parameter, gpointer data
 	dialog = gtk_message_dialog_new(w->window, GTK_DIALOG_MODAL, GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Image Puzzle v1.0\n\nCopyright (C) 2017 by Felix Knobl.");
 	gtk_dialog_run(GTK_DIALOG(dialog));
 	gtk_widget_destroy(dialog);
+}
+
+static void winDialogOkButtonClicked(GtkWidget *widget, gpointer data)
+{
+	GtkWidget *nameEntry = (GtkWidget *)data;
+
+	gchar *nameBuffer;
+	nameBuffer = (gchar*)gtk_entry_get_text(GTK_ENTRY(nameEntry));
+
+	if (strlen(nameBuffer) == 0)
+	{
+		return;
+	}
+
+	g_print("Name: %s\n", nameBuffer);
+
+	gtk_window_close(w->winDialog);
 }
 
 // map actions to callbacks
@@ -206,15 +226,19 @@ void createStatusBar(GtkWidget *box)
 void setStatusBarText(gpointer *text)
 {
 	gtk_statusbar_pop(GTK_STATUSBAR(w->statusBar), w->statusID);
-	gtk_statusbar_push (GTK_STATUSBAR(w->statusBar), w->statusID, text);
+	gtk_statusbar_push(GTK_STATUSBAR(w->statusBar), w->statusID, text);
 }
 
-void setStatusBar(int clicks, unsigned long time)
+gchar *createGameProgressBuffer()
 {
 	gchar *msg = g_malloc(MAX_STATUS_LENGTH);
+	g_snprintf(msg, MAX_STATUS_LENGTH, "Clicks: %d, Time needed: %lu", w->clicks, w->timeNeeded);
+	return msg;
+}
 
-	g_snprintf(msg, MAX_STATUS_LENGTH, "Clicks: %d, Time needed: %lu", clicks, time);
-	setStatusBarText(msg);
+void setStatusBar()
+{
+	setStatusBarText(createGameProgressBuffer());
 }
 
 void checkWin()
@@ -243,9 +267,48 @@ void checkWin()
 
 	if (win)
 	{
-		setStatusBarText("You won!");
+		return;
 	}
 
+	// Create win dialog
+	w->winDialog = gtk_application_window_new(w->app);
+	gtk_window_set_application(GTK_WINDOW(w->winDialog), GTK_APPLICATION(w->app));
+	gtk_window_set_position(GTK_WINDOW(w->winDialog), GTK_WIN_POS_CENTER);
+	gtk_window_set_title(GTK_WINDOW(w->winDialog), "Image Puzzle");
+	gtk_window_set_modal(GTK_WINDOW(w->winDialog), true);
+	gtk_window_set_transient_for(GTK_WINDOW(w->winDialog), GTK_WINDOW(w->window));
+	gtk_window_set_default_size(GTK_WINDOW(w->winDialog), 200, 100);
+	gtk_window_set_deletable(GTK_WINDOW(w->winDialog), false);
+	gtk_window_set_resizable(GTK_WINDOW(w->winDialog), false);
+
+	// Create box in dialog
+	GtkWidget *box;
+	box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+	gtk_container_add(GTK_CONTAINER(w->winDialog), box);
+
+    // Create won label
+	GtkWidget *wonLabel = gtk_label_new("You won!");
+	gtk_box_pack_start(box, wonLabel, FALSE, FALSE, 0);
+
+    // Create text label
+	GtkWidget *textLabel = gtk_label_new(createGameProgressBuffer());
+	gtk_box_pack_start(box, textLabel, FALSE, FALSE, 0);
+
+	// Create input name label
+	GtkWidget *inputNameLabel = gtk_label_new("Enter your name:");
+	gtk_box_pack_start(box, inputNameLabel, FALSE, FALSE, 0);
+
+	// Create entry field
+	GtkWidget *nameEntry = gtk_entry_new();
+	g_object_ref(nameEntry);
+	gtk_box_pack_start(box, nameEntry, FALSE, FALSE, 0);
+
+	GtkWidget *okButton = gtk_button_new_with_label("OK");
+	g_signal_connect(okButton, "clicked", G_CALLBACK(winDialogOkButtonClicked), nameEntry);
+	gtk_box_pack_start(box, okButton, FALSE, FALSE, 0);
+
+	// Show win dialog
+	gtk_widget_show_all(GTK_WIDGET(w->winDialog));
 }
 
 static void puzzleButtonClicked(GtkWidget *widget, gpointer data)
@@ -352,6 +415,8 @@ void gameStart()
 	w->firstButton = NULL;
 	w->secondButton = NULL;
 	w->firstButtonClicked = false;
+	w->clicks = 0;
+	w->timeNeeded = 0;
 
 	// Generate a random number
 	srand(time(NULL));
@@ -399,6 +464,8 @@ void gameStart()
 			n++;
 		}
 	}
+
+	setStatusBar();
 }
 
 // app activate callback - creates the window
