@@ -5,6 +5,7 @@
 	#include <gdk/gdkkeysyms.h>
 	#include <string.h>
 	#include <stdbool.h>
+	#include <time.h>
 	//#include <stdarg.h>
 
 #endif
