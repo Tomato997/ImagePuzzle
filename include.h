@@ -10,9 +10,12 @@
 	#include <gdk/gdkkeysyms.h>
 	#include <time.h>
 	#include <sys/time.h>
+	//#include <fcntl.h>
 
-	//#define DEBUG
+	#define DEBUG
 
+	#define HIGHSCORE_FILE_NAME "imgpuzzle.txt"
+	#define MAX_PATH_LENGTH		256
 	#define MAX_STATUS_LENGTH	256
 
 	#define TIME_EASY			60
@@ -46,6 +49,7 @@
 		GtkApplication *app;
 		GtkWidget *window;
 		GtkWidget *winDialog;
+		GtkWidget *highscoreDialog;
 		GtkWidget *statusBar;
 		guint statusID;
 		guint fieldSize;

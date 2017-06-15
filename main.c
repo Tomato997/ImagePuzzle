@@ -1,4 +1,4 @@
-// clang puzzle.c $(pkg-config --cflags --libs gtk+-3.0) -Wall -g -o puzzle
+// clang main.c $(pkg-config --cflags --libs gtk+-3.0) -Wall -g -o main
 
 #include "include.h"
 
@@ -37,9 +37,175 @@ void menuDifficultyHardCallback(GSimpleAction *action, GVariant *parameter, gpoi
 	startGame();
 }
 
+static void highscoreDialogOkButtonClicked(GtkWidget *widget, gpointer data)
+{
+	gtk_window_close(w->highscoreDialog);
+}
+
 void menuHighScoreCallback(GSimpleAction *action, GVariant *parameter, gpointer data)
 {
-	g_print("menuHighScoreCallback...\n");
+	// Create win dialog
+	w->highscoreDialog = gtk_application_window_new(w->app);
+	gtk_window_set_application(GTK_WINDOW(w->highscoreDialog), GTK_APPLICATION(w->app));
+	gtk_window_set_position(GTK_WINDOW(w->highscoreDialog), GTK_WIN_POS_CENTER);
+	gtk_window_set_title(GTK_WINDOW(w->highscoreDialog), "Image Puzzle - Highscore");
+	gtk_window_set_modal(GTK_WINDOW(w->highscoreDialog), true);
+	gtk_window_set_transient_for(GTK_WINDOW(w->highscoreDialog), GTK_WINDOW(w->window));
+	gtk_window_set_default_size(GTK_WINDOW(w->highscoreDialog), 350, 500);
+	//gtk_window_set_deletable(GTK_WINDOW(w->highscoreDialog), false);
+	gtk_window_set_resizable(GTK_WINDOW(w->highscoreDialog), false);
+
+	// Create box in dialog
+	GtkWidget *box;
+	box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+	gtk_container_add(GTK_CONTAINER(w->highscoreDialog), box);
+
+    // Create grid in dialog
+	GtkWidget *grid = gtk_grid_new();
+
+	// Make all cells same width and height
+	gtk_grid_set_column_homogeneous(grid, true);
+	//gtk_grid_set_row_homogeneous(grid, true);
+
+	gtk_box_pack_start(GTK_BOX(box), grid, true, true, 10);
+
+	// Open the file if it exists
+	char fileName[MAX_PATH_LENGTH] = {0, };
+	char *homeDirectory;
+
+	// Get user directory
+	homeDirectory = getenv("HOME");
+
+	// Check user directory
+	if (homeDirectory == NULL)
+	{
+		printf("ERROR: Could not get home directory!\n");
+		exit(-1);
+	}
+
+	// Get the absolute location to the file name
+	strncpy(fileName, homeDirectory, strlen(homeDirectory));
+
+	// Add a slash if needed
+	if (fileName[strlen(homeDirectory) + 1] != '/')
+	{
+		fileName[strlen(fileName)] = '/';
+	}
+
+	strncpy(&fileName[strlen(homeDirectory) + 1], HIGHSCORE_FILE_NAME, strlen(HIGHSCORE_FILE_NAME));
+
+	#if defined DEBUG
+		g_print("INFO: Highscore file is: '%s'\n", fileName);
+	#endif
+
+	FILE *fs = NULL;
+	char *currentLine = NULL;
+	size_t len = 0;
+	ssize_t bytesRead = 0;
+	int lineNumber = 1;
+	bool firstLine = true;
+
+	fs = fopen(fileName, "r");
+
+	if (fs == NULL)
+	{
+		g_print("ERROR: Can not open file '%s'.\n\n", fileName);
+		// TODO display empty highscore table
+		exit(-2);
+	}
+
+	while ((bytesRead = getline(&currentLine, &len, fs)) != -1)
+	{
+		char *name = NULL;
+		char *clicks = NULL;
+		char *time = NULL;
+
+		// Is the line empty?
+		if (strlen(currentLine) <= 1)
+		{
+			continue;
+		}
+
+		name = strtok(currentLine, "|");
+
+		// Line valid?
+		if (name == NULL)
+		{
+			continue;
+		}
+
+		clicks = strtok(NULL, "|");
+
+		// Line valid?
+		if (clicks == NULL)
+		{
+			continue;
+		}
+
+		time = strtok(NULL, "\n");
+
+		// Line valid?
+		if (time == NULL)
+		{
+			continue;
+		}
+
+		#if defined DEBUG
+			g_print("Name: '%s' Clicks: '%s' Time: '%s'\n", name, clicks, time);
+		#endif
+
+		// If this is our first highscore, add column headers first
+		if (firstLine)
+		{
+			GtkWidget *nameHeaderLabel = gtk_label_new("<span size=\"large\" weight=\"bold\">Name</span>");
+			gtk_label_set_use_markup(GTK_LABEL(nameHeaderLabel), true);
+			gtk_grid_attach(GTK_GRID(grid), nameHeaderLabel, 0, 0, 1, 1);
+
+			// Create clicks label
+			GtkWidget *clicksHeaderLabel = gtk_label_new("<span size=\"large\" weight=\"bold\">Clicks</span>"); //("<span color=\"#ff0000\">Clicks</span>"); //
+			gtk_label_set_use_markup(GTK_LABEL(clicksHeaderLabel), true);
+			gtk_grid_attach(GTK_GRID(grid), clicksHeaderLabel, 1, 0, 1, 1);
+
+			// Create time label
+			GtkWidget *timeHeaderLabel = gtk_label_new("<span size=\"large\" weight=\"bold\">Time</span>");
+			gtk_label_set_use_markup(GTK_LABEL(timeHeaderLabel), true);
+			gtk_grid_attach(GTK_GRID(grid), timeHeaderLabel, 2, 0, 1, 1);
+
+			firstLine = false;
+		}
+
+		// Create name label
+		GtkWidget *nameLabel = gtk_label_new(name);
+		gtk_grid_attach(GTK_GRID(grid), nameLabel, 0, lineNumber, 1, 1);
+
+		// Create clicks label
+		GtkWidget *clicksLabel = gtk_label_new(clicks);
+		gtk_grid_attach(GTK_GRID(grid), clicksLabel, 1, lineNumber, 1, 1);
+
+		// Create time label
+		GtkWidget *timeLabel = gtk_label_new(time);
+		gtk_grid_attach(GTK_GRID(grid), timeLabel, 2, lineNumber, 1, 1);
+
+		lineNumber++;
+	}
+
+	// Close the file stream
+	if (fclose(fs) != 0)
+	{
+		g_print("ERROR: fclose() failed.\n\n");
+		exit(-1);
+	}
+
+	// Free the line buffer
+	free(currentLine);
+
+	// Add close button
+	GtkWidget *closeButton = gtk_button_new_with_label("Close");
+	g_signal_connect(closeButton, "clicked", G_CALLBACK(highscoreDialogOkButtonClicked), NULL);
+	gtk_box_pack_start(box, closeButton, FALSE, FALSE, 0);
+
+	// Show highscore dialog
+	gtk_widget_show_all(GTK_WIDGET(w->highscoreDialog));
 }
 
 void menuQuitCallback(GSimpleAction *action, GVariant *parameter, gpointer data)
