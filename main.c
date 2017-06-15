@@ -2,115 +2,53 @@
 
 #include "include.h"
 
-#define MAX_STATUS_LENGTH	256
-
-#define DIFFICULTY_EASY		4
-#define DIFFICULTY_NORMAL	8
-#define DIFFICULTY_HARD		12
-//const int difficultyMaxButtons[3] = {EASY_MAX_BUTTONS, NORMAL_MAX_BUTTONS, HARD_MAX_BUTTONS};
-
-typedef struct
-{
-	GtkWidget *button;
-	int currentX;
-	int currentY;
-	int originalX;
-	int originalY;
-} puzzleButton;
-
-typedef struct
-{
-	GtkApplication *app;
-	GtkWidget *window;
-	GtkWidget *winDialog;
-	GtkWidget *statusBar;
-	guint statusID;
-	guint difficulty;
-	GtkWidget *grid;
-	puzzleButton *puzzleButtons[DIFFICULTY_HARD][DIFFICULTY_HARD];
-	puzzleButton *firstButton;
-	puzzleButton *secondButton;
-	bool firstButtonClicked;
-	int clicks;
-	int timeNeeded;
-} widgets;
-
 widgets *w = NULL;
-
-// callback executed when the "Okay" button is clicked
-/*
-static void ok_clicked(GtkWidget *widget, gpointer data)
-{
-  gchar *buffer1, *buffer2;
-
-  // obtain text from the entry box
-  buffer1 = (gchar*)gtk_entry_get_text(GTK_ENTRY(input_entry));
-  // allocate memory for the final text
-  buffer2 = g_malloc(sizeof(gchar)*(strlen(buffer1)+7));
-  // assemble the final text
-  sprintf(buffer2,"Hello %s!", buffer1);
-  // write the final text to the label on top
-  gtk_label_set_text(GTK_LABEL(label_output), buffer2);
-  // free the memory
-  g_free(buffer2);
-}
-
-// callback that is executed when the "Clear" button is clicked
-static void clr_clicked(GtkWidget *widget, gpointer data)
-{
-  // clear the entry box
-  gtk_entry_set_text(GTK_ENTRY(input_entry), "");
-  // clear the label
-  gtk_label_set_text(GTK_LABEL(label_output), "Hello ?");
-}*/
-
 
 void menuRestartCallback(GSimpleAction *action, GVariant *parameter, gpointer data)
 {
-	widgets *w = (widgets *)data;
-
-	//bmd_message_dialog (action, NULL, (gpointer) a);
-	g_print("menuRestartCallback...\n");
+	// Start a new game
+	startGame();
 }
 
 void menuDifficultyEasyCallback(GSimpleAction *action, GVariant *parameter, gpointer data)
 {
-	w->difficulty = DIFFICULTY_EASY;
-	gameStart();
+	// Change difficulty
+	w->difficulty = EASY;
+
+	// Start a new game
+	startGame();
 }
 
 void menuDifficultyNormalCallback(GSimpleAction *action, GVariant *parameter, gpointer data)
 {
-	w->difficulty = DIFFICULTY_NORMAL;
-	gameStart();
+	// Change difficulty
+	w->difficulty = NORMAL;
+
+	// Start a new game
+	startGame();
 }
 
 void menuDifficultyHardCallback(GSimpleAction *action, GVariant *parameter, gpointer data)
 {
-	w->difficulty = DIFFICULTY_HARD;
-	gameStart();
+	// Change difficulty
+	w->difficulty = HARD;
+
+	// Start a new game
+	startGame();
 }
 
 void menuHighScoreCallback(GSimpleAction *action, GVariant *parameter, gpointer data)
 {
-	widgets *w = (widgets *)data;
-
-	//message_dialog (action, NULL, (gpointer) w);
 	g_print("menuHighScoreCallback...\n");
 }
 
 void menuQuitCallback(GSimpleAction *action, GVariant *parameter, gpointer data)
 {
-	widgets *w = (widgets *)data;
-
-	g_print("menuQuitCallback...\n");
 	g_application_quit(G_APPLICATION(w->app));
 }
 
 void menuAboutCallback(GSimpleAction *action, GVariant *parameter, gpointer data)
 {
-	widgets *w = (widgets *)data;
-
 	GtkWidget *dialog;
 	dialog = gtk_message_dialog_new(w->window, GTK_DIALOG_MODAL, GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Image Puzzle v1.0\n\nCopyright (C) 2017 by Felix Knobl.");
 	gtk_dialog_run(GTK_DIALOG(dialog));
@@ -132,9 +70,12 @@ static void winDialogOkButtonClicked(GtkWidget *widget, gpointer data)
 	g_print("Name: %s\n", nameBuffer);
 
 	gtk_window_close(w->winDialog);
+
+	// Start a new game
+	startGame();
 }
 
-// map actions to callbacks
+// Map callbacks
 const GActionEntry menuCallbacks[] =
 {
 	{"restart", menuRestartCallback, NULL, NULL, NULL},
@@ -232,7 +173,7 @@ void setStatusBarText(gpointer *text)
 gchar *createGameProgressBuffer()
 {
 	gchar *msg = g_malloc(MAX_STATUS_LENGTH);
-	g_snprintf(msg, MAX_STATUS_LENGTH, "Clicks: %d, Time needed: %lu", w->clicks, w->timeNeeded);
+	g_snprintf(msg, MAX_STATUS_LENGTH, "Clicks: %d, Time needed: %d seconds.", w->clicks, w->timeNeeded);
 	return msg;
 }
 
@@ -247,9 +188,9 @@ void checkWin()
 	int y = 0;
 	bool win = true;
 
-	for (y = 0; y < w->difficulty; y++)
+	for (y = 0; y < w->fieldSize; y++)
 	{
-		for (x = 0; x < w->difficulty; x++)
+		for (x = 0; x < w->fieldSize; x++)
 		{
 			if (w->puzzleButtons[x][y]->currentX != w->puzzleButtons[x][y]->originalX ||
 				w->puzzleButtons[x][y]->currentY != w->puzzleButtons[x][y]->originalY)
@@ -265,10 +206,13 @@ void checkWin()
 		}
 	}
 
-	if (win)
+	if (!win)
 	{
 		return;
 	}
+
+	// Stop the timer
+	stopTimer();
 
 	// Create win dialog
 	w->winDialog = gtk_application_window_new(w->app);
@@ -317,17 +261,25 @@ static void puzzleButtonClicked(GtkWidget *widget, gpointer data)
 
 	gchar *text = gtk_button_get_label(buttonStruct->button);
 
+	w->clicks++;
+	setStatusBar();
+
 	if (!w->firstButtonClicked)
 	{
 		// First button clicked
-		g_print("First button: %s\n", text);
+		#if defined DEBUG
+			g_print("First button: %s\n", text);
+		#endif
+
 		w->firstButton = buttonStruct;
 		w->firstButtonClicked = true;
 	}
 	else
 	{
-		// Second button clickd
-		g_print("Second button: %s\n", text);
+		// Second button clicked
+		#if defined DEBUG
+			g_print("Second button: %s\n", text);
+		#endif
 
 		if (w->firstButton == buttonStruct)
 		{
@@ -339,8 +291,10 @@ static void puzzleButtonClicked(GtkWidget *widget, gpointer data)
 		w->secondButton = buttonStruct;
 		w->firstButtonClicked = false;
 
-		g_print("First  button x = %d, y = %d\n", w->firstButton->currentX, w->firstButton->currentY);
-		g_print("Second button x = %d, y = %d\n\n", w->secondButton->currentX, w->secondButton->currentY);
+		#if defined DEBUG
+			g_print("First  button x = %d, y = %d\n", w->firstButton->currentX, w->firstButton->currentY);
+			g_print("Second button x = %d, y = %d\n\n", w->secondButton->currentX, w->secondButton->currentY);
+		#endif
 
 		// Increase the reference count
 		g_object_ref(w->firstButton->button);
@@ -367,8 +321,10 @@ static void puzzleButtonClicked(GtkWidget *widget, gpointer data)
 		g_object_unref(w->firstButton->button);
 		g_object_unref(w->secondButton->button);
 
-		g_print("First  button x = %d, y = %d\n", w->firstButton->currentX, w->firstButton->currentY);
-		g_print("Second button x = %d, y = %d\n\n", w->secondButton->currentX, w->secondButton->currentY);
+		#if defined DEBUG
+			g_print("First  button x = %d, y = %d\n", w->firstButton->currentX, w->firstButton->currentY);
+			g_print("Second button x = %d, y = %d\n\n", w->secondButton->currentX, w->secondButton->currentY);
+		#endif
 
 		checkWin();
 	}
@@ -380,9 +336,9 @@ bool checkFieldFree(int checkX, int checkY)
 	int y = 0;
 	bool fieldFree = true;
 
-	for (y = 0; y < w->difficulty; y++)
+	for (y = 0; y < w->fieldSize; y++)
 	{
-		for (x = 0; x < w->difficulty; x++)
+		for (x = 0; x < w->fieldSize; x++)
 		{
 			if (w->puzzleButtons[x][y]->currentX == checkX && w->puzzleButtons[x][y]->currentY == checkY)
 			{
@@ -400,9 +356,77 @@ bool checkFieldFree(int checkX, int checkY)
 	return fieldFree;
 }
 
-void gameStart()
+void TimerElapsed(void)
 {
-	g_print("Game start\n");
+	#if defined DEBUG
+		g_print("INFO: TimerElapsed()\n");
+	#endif
+
+	// Handle the times
+	w->timeNeeded++;
+	w->countDown--;
+
+	// Update status bar
+	setStatusBar();
+
+	// Time out?
+	if (w->countDown <= 0)
+	{
+		// Stop the timer
+		stopTimer();
+
+		// Show lose dialog
+		GtkWidget *dialog;
+		dialog = gtk_message_dialog_new(w->window, GTK_DIALOG_MODAL, GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Sorry. Time ran out. You have lost! :(\n\nClick 'OK' to start a new game!");
+		gtk_dialog_run(GTK_DIALOG(dialog));
+		gtk_widget_destroy(dialog);
+
+		// Start a new game
+		startGame();
+	}
+}
+
+void startTimer()
+{
+	struct itimerval timerSettings;
+
+	if (signal(SIGALRM, (void(*)(int))TimerElapsed) == SIG_ERR)
+	{
+		g_print("ERROR: Unable to set signal.\n\n");
+		exit(-1);
+	}
+
+	timerSettings.it_value.tv_sec  = TIMER_INTERVAL / 1000;
+	timerSettings.it_value.tv_usec = (TIMER_INTERVAL * 1000) % 1000000;
+	timerSettings.it_interval = timerSettings.it_value;
+
+	if (setitimer(ITIMER_REAL, &timerSettings, NULL) == -1)
+	{
+		g_print("ERROR: Error calling setitimer().\n\n");
+		exit(-1);
+	}
+}
+
+void stopTimer()
+{
+	struct itimerval timerSettings;
+
+	timerSettings.it_value.tv_sec  = 0;
+	timerSettings.it_value.tv_usec = 0;
+	timerSettings.it_interval = timerSettings.it_value;
+
+	if (setitimer(ITIMER_REAL, NULL, NULL) == -1)
+	{
+		g_print("ERROR: Error calling setitimer().\n\n");
+		exit(-1);
+	}
+}
+
+void startGame()
+{
+	#if defined DEBUG
+		g_print("INFO: startGame()\n");
+	#endif
 
 	int x = 0;
 	int y = 0;
@@ -418,15 +442,79 @@ void gameStart()
 	w->clicks = 0;
 	w->timeNeeded = 0;
 
-	// Generate a random number
+	// Set difficulty specified settings
+	switch (w->difficulty)
+	{
+		case EASY:
+			w->fieldSize = SIZE_EASY;
+			w->countDown = TIME_EASY;
+			break;
+
+		case NORMAL:
+			w->fieldSize = SIZE_NORMAL;
+			w->countDown = TIME_NORMAL;
+			break;
+
+		case HARD:
+			w->fieldSize = SIZE_HARD;
+			w->countDown = TIME_HARD;
+			break;
+
+		default:
+			// Should never happen
+			g_print("FATAL ERROR: Game difficulty not set! :(\n\n");
+			exit(-1000);
+			break;
+	}
+
+	// Init random number generator
 	srand(time(NULL));
 
-	// Alloc and init all button positions with -1
-	for (y = 0; y < w->difficulty; y++)
+	// Safely destroy all button widgets and struct
+	for (y = 0; y < SIZE_HARD; y++)
 	{
-		for (x = 0; x < w->difficulty; x++)
+		for (x = 0; x < SIZE_HARD; x++)
 		{
+			if (w->puzzleButtons[x][y] == NULL)
+			{
+				continue;
+			}
+
+			if (w->puzzleButtons[x][y]->button == NULL)
+			{
+				continue;
+			}
+
+			// Remove the button from container
+			gtk_container_remove(w->grid, w->puzzleButtons[x][y]->button);
+
+			// Invalidate the button pointer
+			w->puzzleButtons[x][y]->button = NULL;
+
+			// Free the struct
+			g_free(w->puzzleButtons[x][y]);
+
+			// Invalidate the struct pointer
+			w->puzzleButtons[x][y] = NULL;
+		}
+	}
+
+	// Loop through the fields
+	for (y = 0; y < w->fieldSize; y++)
+	{
+		for (x = 0; x < w->fieldSize; x++)
+		{
+			// Allocate memory and create a new button
 			w->puzzleButtons[x][y] = g_malloc(sizeof(puzzleButton));
+			w->puzzleButtons[x][y]->button = gtk_button_new();
+
+			// Set callback
+			g_signal_connect(w->puzzleButtons[x][y]->button, "clicked", G_CALLBACK(puzzleButtonClicked), w->puzzleButtons[x][y]);
+
+			// Increase the reference count
+			g_object_ref(w->puzzleButtons[x][y]->button);
+
+			// Init all button positions with -1
 			w->puzzleButtons[x][y]->currentX  = -1;
 			w->puzzleButtons[x][y]->currentY  = -1;
 			w->puzzleButtons[x][y]->originalX = -1;
@@ -434,10 +522,10 @@ void gameStart()
 		}
 	}
 
-	// Create and place buttons to random positions
-	for (y = 0; y < w->difficulty; y++)
+	// Place buttons to random positions
+	for (y = 0; y < w->fieldSize; y++)
 	{
-		for (x = 0; x < w->difficulty; x++)
+		for (x = 0; x < w->fieldSize; x++)
 		{
 			char labelBuffer[8];
 			snprintf(labelBuffer, sizeof(labelBuffer), "%d", n);
@@ -445,13 +533,12 @@ void gameStart()
 			// Check free position
 			do
 			{
-				randomX = rand() % w->difficulty;
-				randomY = rand() % w->difficulty;
+				randomX = rand() % w->fieldSize;
+				randomY = rand() % w->fieldSize;
 			} while (!checkFieldFree(randomX, randomY));
 
-
-			// Create button
-			w->puzzleButtons[x][y]->button = gtk_button_new_with_label(labelBuffer);
+			// Set button properties
+			gtk_button_set_label(w->puzzleButtons[x][y]->button, labelBuffer);
 			w->puzzleButtons[x][y]->currentX = randomX;
 			w->puzzleButtons[x][y]->currentY = randomY;
 			w->puzzleButtons[x][y]->originalX = x;
@@ -459,14 +546,35 @@ void gameStart()
 
 			// Attach button to grid
 			gtk_grid_attach(GTK_GRID(w->grid), w->puzzleButtons[x][y]->button, randomX, randomY, 1, 1);
-			g_signal_connect(w->puzzleButtons[x][y]->button, "clicked", G_CALLBACK(puzzleButtonClicked), w->puzzleButtons[x][y]);
+
+			// Decrease the reference count
+			g_object_unref(w->puzzleButtons[x][y]->button);
+
+			gtk_widget_show(w->puzzleButtons[x][y]->button);
 
 			n++;
 		}
 	}
 
+	// Get window width
+	int currentWidth = 0, currentHeight = 0;
+	gtk_window_get_size(w->window, &currentWidth, &currentHeight);
+
+	// Set window height = width + 50
+	gtk_window_resize(w->window, currentWidth, currentWidth + 50);
+
+	// Update status bar
 	setStatusBar();
+
+	// Start the timer
+	startTimer();
 }
+
+/*void my_getsize(GtkWidget *widget, GtkAllocation *allocation, void *data)
+{
+	g_print("resize!\n");
+}
+*/
 
 // app activate callback - creates the window
 static void activate(GtkApplication *app, gpointer data)
@@ -478,56 +586,26 @@ static void activate(GtkApplication *app, gpointer data)
 	gtk_window_set_application(GTK_WINDOW(w->window), GTK_APPLICATION(app));
 	gtk_window_set_position(GTK_WINDOW(w->window), GTK_WIN_POS_CENTER);
 	gtk_window_set_title(GTK_WINDOW(w->window), "Image Puzzle");
-	gtk_window_set_default_size(GTK_WINDOW(w->window), 500, 500);
-
+	gtk_window_set_default_size(GTK_WINDOW(w->window), 500, 550);
 	gtk_window_set_default_icon_from_file("icon.png", NULL);
 
+	//g_signal_connect(w->window, "size-allocate", G_CALLBACK(my_getsize), NULL);
+
 	// Create a vertical box
-	GtkWidget *box;
-	box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-	gtk_container_add(GTK_CONTAINER(w->window), box);
+	//GtkWidget *box;
+	w->box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+	gtk_container_add(GTK_CONTAINER(w->window), w->box);
 
-	createMenu(box);
+	createMenu(w->box);
 
-	// create a grid to be used as layout containerr
-	createGrid(box);
+	// create a grid to be used as layout container
+	createGrid(w->box);
 
-	createStatusBar(box);
+	createStatusBar(w->box);
 
-	setStatusBar(w->difficulty, 0);
+  	startGame();
 
-	gameStart();
-
-  //GtkWidget *clr_button, *ok_button;
-	/*
-
-  // output label
-
-
-  // name label
-  label_name = gtk_label_new ("Name:");
-  gtk_grid_attach(GTK_GRID(grid), label_name, 0,1,1,1);
-
-  // text entry
-  input_entry = gtk_entry_new();
-  gtk_grid_attach(GTK_GRID(grid), input_entry, 1,1,1,1);
-
-  // CLEAR button
-  clr_button = gtk_button_new_with_mnemonic("_Clear");
-  gtk_grid_attach(GTK_GRID(grid), clr_button, 0,2,1,1);
-  // connect a signal when the button is clicked -> invoke clr_clicked() callback
-  g_signal_connect(clr_button, "clicked", G_CALLBACK(clr_clicked), NULL);
-
-  // OKAY button
-  ok_button = gtk_button_new_with_mnemonic("_Okay");
-  gtk_grid_attach(GTK_GRID(grid), ok_button, 0,3,1,1);
-  // connect a signal when the button is clicked -> invoke cok_clicked() callback
-  g_signal_connect(ok_button, "clicked", G_CALLBACK(ok_clicked), NULL);
-
-	 *
-	 */
-  //gtk_widget_show_all (window);
-	gtk_widget_show_all(GTK_WIDGET(w->window));
+  	gtk_widget_show_all(GTK_WIDGET(w->window));
 }
 
 int main (int argc, char **argv)
@@ -536,14 +614,16 @@ int main (int argc, char **argv)
 
 	w = g_malloc(sizeof(widgets));
 
-	g_print("Size: %d\n", sizeof(widgets));
-
-	w->difficulty = 4;
+	// Set App default settings
+	w->difficulty = EASY;
 
 	// Create the application
 	w->app = gtk_application_new("org.gtk.example", G_APPLICATION_FLAGS_NONE);
 	g_signal_connect(w->app, "activate", G_CALLBACK(activate), (gpointer)w);
 	status = g_application_run(G_APPLICATION(w->app), argc, argv);
+
+
+
 	g_object_unref(w->app);
 
 	g_free(w);
