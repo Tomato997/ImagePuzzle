@@ -46,6 +46,24 @@ void showSimpleDialog(const gchar *text)
 	gtk_widget_destroy(dialog);
 }
 
+// Returns true if path is a regular file
+bool isFile(const char *path)
+{
+    struct stat pathStat;
+    int returnValue = 0;
+
+    stat(path, &pathStat);
+    returnValue = S_ISREG(pathStat.st_mode);
+
+    if (returnValue == 1)
+    {
+		return true;
+    }
+    else
+    {
+		return false;
+    }
+}
 
 // Returns the full path of the highscore file name
 // Pointer musst be freed after use
@@ -790,6 +808,8 @@ void stopTimer()
 	w->timerStarted = false;
 }
 
+
+
 void startGame()
 {
 	#if defined DEBUG
@@ -869,6 +889,179 @@ void startGame()
 		}
 	}
 
+	DIR *imagesDir;
+	struct dirent *directoryEntry;
+	char fileNameBuffer[MAX_PATH_LENGTH];
+	char **fileList = NULL;
+	char **newFileList = NULL;
+	int filesCount = 0;
+
+	// Allocate a pointer for fileList
+	fileList = malloc(0);
+
+	// Open path and get all images
+	if ((imagesDir = opendir(IMAGES_PATH)) != NULL)
+	{
+		// Loop through all elements in the current directory
+		while ((directoryEntry = readdir(imagesDir)) != NULL)
+		{
+			// Clear the buffer
+			memset((void *)fileNameBuffer, 0, MAX_PATH_LENGTH);
+
+			// Append path to buffer
+			strncat(fileNameBuffer, IMAGES_PATH, strlen(IMAGES_PATH));
+
+			// Append filename to buffer
+			strncat(fileNameBuffer, directoryEntry->d_name, strlen(directoryEntry->d_name));
+
+			// Check if that is a file
+			if (!isFile(fileNameBuffer))
+			{
+				continue;
+			}
+
+			// Create a temporary buffer for the check file extension routine
+			char checkFileNameBuffer[MAX_PATH_LENGTH];
+
+			strncpy(checkFileNameBuffer, fileNameBuffer, strlen(fileNameBuffer));
+
+			// Check if the pathBuffer contains a file extension
+			char *pDot = strrchr(checkFileNameBuffer, '.');
+
+			// File extension found?
+			if (pDot == NULL)
+			{
+				continue;
+			}
+
+			char *fileExtension = pDot;
+
+			// Roll over the '.'
+			fileExtension++;
+
+			// Uppercase the file extension
+			while (*pDot++ != '\0')
+			{
+				*pDot = toupper(*pDot);
+			}
+
+			bool fileExtensionValid = false;
+
+			// Match allowed file extensions
+			for (n = 0; n < MAX_ALLOWED_EXTENSIONS_COUNT; n++)
+			{
+				if (strncmp(fileExtension, allowedExtensions[n], strlen(allowedExtensions[n])) == 0)
+				{
+					fileExtensionValid = true;
+					break;
+				}
+			}
+
+			// File extension valid?
+			if (!fileExtensionValid)
+			{
+				continue;
+			}
+
+			// Reallocate space for the current file name
+			newFileList = realloc(fileList, sizeof(*fileList) * (filesCount + 1));
+
+			if (newFileList == NULL)
+			{
+				continue;
+			}
+
+			fileList = newFileList;
+
+			// Allocate space for the current file
+			fileList[filesCount] = (char *)calloc(MAX_PATH_LENGTH, sizeof(char));
+
+			// Alloc ok?
+			if (fileList[filesCount] == NULL)
+			{
+				continue;
+			}
+
+			// Add file name to the list
+			strncpy(fileList[filesCount], fileNameBuffer, strlen(fileNameBuffer));
+
+			// File is a valid image
+			filesCount++;
+		}
+
+		closedir(imagesDir);
+	}
+	else
+	{
+		g_print("ERROR: Could not find images directory.\n\n");
+		exit(-1);
+
+	}
+
+	#if defined DEBUG
+		for (n = 0; n < filesCount; n++)
+		{
+			// Free memory of each element
+			g_print("Found file: '%s'\n", fileList[n]);
+		}
+	#endif
+
+	// Pick a random image from the list
+	int randomImage = 0;
+	randomImage = rand() % filesCount;
+
+	// Load an image
+	GdkPixbuf *imageBuffer = loadImage(fileList[randomImage]);
+
+	// Free fileList
+	for (n = 0; n < filesCount; n++)
+	{
+		// Free memory of each element
+		free(fileList[n]);
+	}
+
+	fileList = NULL;
+
+	int imageWidth = 0;
+	int imageHeight = 0;
+
+	imageWidth = gdk_pixbuf_get_width(imageBuffer);
+	imageHeight = gdk_pixbuf_get_height(imageBuffer);
+
+	#if defined DEBUG
+		g_print("Image W = %d, H = %d\n", imageWidth, imageHeight);
+	#endif
+
+	/*
+	// Get maximal working area on this screen
+	GdkScreen  *screen  = gtk_window_get_screen(GTK_WINDOW(w->window));
+	GdkDisplay *display = gdk_screen_get_display(screen);
+
+	if (display == NULL)
+	g_print("display is null\n");
+
+	gtk_widget_set_realized (GTK_WIDGET(w->window), true);
+
+	GdkWindow  *window  = gtk_widget_get_window(GTK_WIDGET(w->window));
+
+	if (window == NULL)
+	g_print("window is null\n");
+
+	GdkMonitor *monitor = gdk_display_get_monitor_at_window(display, window);
+
+
+	GdkRectangle *workarea = NULL;
+	gdk_monitor_get_workarea(monitor, workarea);
+
+
+	//g_print("workarea: %d x %d\n", workarea->width, workarea->height);
+*/
+	// Calculate new image size
+
+
+	int sliceWidth = imageWidth / w->fieldSize;
+	int sliceHeight = imageHeight / w->fieldSize;
+
 	// Loop through the fields
 	for (y = 0; y < w->fieldSize; y++)
 	{
@@ -907,8 +1100,16 @@ void startGame()
 				randomY = rand() % w->fieldSize;
 			} while (!checkFieldFree(randomX, randomY));
 
+			// Set button image
+			//gtk_button_set_label(GTK_BUTTON(w->puzzleButtons[x][y]->button), labelBuffer);
+			GdkPixbuf *currentSlice = gdk_pixbuf_new_subpixbuf(imageBuffer, x * sliceWidth, y * sliceHeight, sliceWidth, sliceHeight);
+			gtk_button_set_image(GTK_BUTTON(w->puzzleButtons[x][y]->button), gtk_image_new_from_pixbuf(currentSlice));
+
+
+
+			//gtk_button_set_image(GTK_BUTTON(w->puzzleButtons[x][y]->button), gtk_image_new_from_pixbuf(imageBuffer));
+
 			// Set button properties
-			gtk_button_set_label(GTK_BUTTON(w->puzzleButtons[x][y]->button), labelBuffer);
 			w->puzzleButtons[x][y]->currentX = randomX;
 			w->puzzleButtons[x][y]->currentY = randomY;
 			w->puzzleButtons[x][y]->originalX = x;
@@ -939,6 +1140,8 @@ void startGame()
 
 	// Start the timer
 	startTimer();
+
+
 }
 
 // App activate callback

@@ -10,6 +10,11 @@
 	#include <gdk/gdkkeysyms.h>
 	#include <time.h>
 	#include <sys/time.h>
+	#include <dirent.h>
+	#include <sys/types.h>
+	#include <sys/stat.h>
+	#include <unistd.h>
+	#include <ctype.h>
 	//#include <fcntl.h>
 
 	#define DEBUG
@@ -19,11 +24,13 @@
 	#define APP_COPYRIGHT		"Copyright (C) 2017 by Felix Knobl."
 
 	#define HIGHSCORE_FILE_NAME "imgpuzzle.txt"
+	#define IMAGES_PATH			"./images/"
 
 	#define MAX_NAME_LENGTH		32
 	#define MAX_LINE_LENGTH		256
 	#define MAX_PATH_LENGTH		256
 	#define MAX_STATUS_LENGTH	256
+	#define MAX_ALLOWED_EXTENSIONS_COUNT	2
 
 	#define TIME_EASY			60
 	#define TIME_NORMAL			300
@@ -75,5 +82,6 @@
 	} widgets;
 
 	extern widgets *w;
+	const char *allowedExtensions[MAX_ALLOWED_EXTENSIONS_COUNT] = {"JPG", "PNG"};
 
 #endif
