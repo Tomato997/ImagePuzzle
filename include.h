@@ -13,8 +13,15 @@
 	//#include <fcntl.h>
 
 	#define DEBUG
+	//#define DEBUG2
+
+	#define APP_NAME			"Image Puzzle v1.0"
+	#define APP_COPYRIGHT		"Copyright (C) 2017 by Felix Knobl."
 
 	#define HIGHSCORE_FILE_NAME "imgpuzzle.txt"
+
+	#define MAX_NAME_LENGTH		32
+	#define MAX_LINE_LENGTH		256
 	#define MAX_PATH_LENGTH		256
 	#define MAX_STATUS_LENGTH	256
 
@@ -60,12 +67,12 @@
 		puzzleButton *firstButton;
 		puzzleButton *secondButton;
 		bool firstButtonClicked;
+		bool timerStarted;
+		bool saveTimerStarted;
 		int clicks;
 		int timeNeeded;
 		int countDown;
 	} widgets;
-
-
 
 	extern widgets *w;
 
