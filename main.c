@@ -808,8 +808,6 @@ void stopTimer()
 	w->timerStarted = false;
 }
 
-
-
 void startGame()
 {
 	#if defined DEBUG
@@ -818,7 +816,7 @@ void startGame()
 
 	int x = 0;
 	int y = 0;
-	int n = 1;
+	int n = 0;
 
 	int randomX = 0;
 	int randomY = 0;
@@ -889,6 +887,7 @@ void startGame()
 		}
 	}
 
+	// Create DIR object
 	DIR *imagesDir;
 	struct dirent *directoryEntry;
 	char fileNameBuffer[MAX_PATH_LENGTH];
@@ -899,7 +898,7 @@ void startGame()
 	// Allocate a pointer for fileList
 	fileList = malloc(0);
 
-	// Open path and get all images
+	// Open path and get all files
 	if ((imagesDir = opendir(IMAGES_PATH)) != NULL)
 	{
 		// Loop through all elements in the current directory
@@ -1001,8 +1000,7 @@ void startGame()
 	#if defined DEBUG
 		for (n = 0; n < filesCount; n++)
 		{
-			// Free memory of each element
-			g_print("Found file: '%s'\n", fileList[n]);
+			g_print("Found image: '%s'\n", fileList[n]);
 		}
 	#endif
 
@@ -1011,7 +1009,8 @@ void startGame()
 	randomImage = rand() % filesCount;
 
 	// Load an image
-	GdkPixbuf *imageBuffer = loadImage(fileList[randomImage]);
+	GdkPixbuf *imageBuffer = NULL;
+	GdkPixbuf *unscaledImageBuffer = loadImage(fileList[randomImage]);
 
 	// Free fileList
 	for (n = 0; n < filesCount; n++)
@@ -1022,43 +1021,72 @@ void startGame()
 
 	fileList = NULL;
 
+	// Image loaded?
+	if (unscaledImageBuffer == NULL)
+	{
+		g_print("ERROR: Could not load the image.\n\n");
+		exit(-1);
+	}
+
 	int imageWidth = 0;
 	int imageHeight = 0;
+	int scaleFactor = 0;
 
-	imageWidth = gdk_pixbuf_get_width(imageBuffer);
-	imageHeight = gdk_pixbuf_get_height(imageBuffer);
+	// Get the image size
+	imageWidth = gdk_pixbuf_get_width(unscaledImageBuffer);
+	imageHeight = gdk_pixbuf_get_height(unscaledImageBuffer);
+
+	if (imageWidth == 0 || imageHeight == 0)
+	{
+		g_print("ERROR: Invalid image size.\n\n");
+		exit(-1);
+	}
 
 	#if defined DEBUG
 		g_print("Image W = %d, H = %d\n", imageWidth, imageHeight);
 	#endif
 
-	/*
-	// Get maximal working area on this screen
-	GdkScreen  *screen  = gtk_window_get_screen(GTK_WINDOW(w->window));
-	GdkDisplay *display = gdk_screen_get_display(screen);
+	// Assume that today's monitor resolution is at least SVGA (800x600)
+	// Get image orientation
+	if (imageWidth > imageHeight)
+	{
+		// Orientation is landscape
+		scaleFactor = imageWidth / 800;
+	}
+	else
+	{
+		// Orientation is portrait
+		scaleFactor = imageHeight / 600;
+	}
 
-	if (display == NULL)
-	g_print("display is null\n");
+	// Minimal scaleFactor is 1
+	if (scaleFactor < 1)
+	{
+		scaleFactor = 1;
+		imageBuffer = unscaledImageBuffer;
+	}
+	else
+	{
+		// Calculate new image size
+		imageWidth = imageWidth / scaleFactor;
+		imageHeight = imageHeight / scaleFactor;
 
-	gtk_widget_set_realized (GTK_WIDGET(w->window), true);
+		// Scale the image
+		imageBuffer = gdk_pixbuf_scale_simple(unscaledImageBuffer, imageWidth, imageHeight, GDK_INTERP_BILINEAR);
 
-	GdkWindow  *window  = gtk_widget_get_window(GTK_WIDGET(w->window));
+		// Scaled successfully?
+		if (imageBuffer == NULL)
+		{
+			g_print("ERROR: Not enough memory to scale the image.\n\n");
+			exit(-1);
+		}
+	}
 
-	if (window == NULL)
-	g_print("window is null\n");
+	#if defined DEBUG
+		g_print("Scaled Image W = %d, H = %d\n", imageWidth / scaleFactor, imageHeight / scaleFactor);
+	#endif
 
-	GdkMonitor *monitor = gdk_display_get_monitor_at_window(display, window);
-
-
-	GdkRectangle *workarea = NULL;
-	gdk_monitor_get_workarea(monitor, workarea);
-
-
-	//g_print("workarea: %d x %d\n", workarea->width, workarea->height);
-*/
-	// Calculate new image size
-
-
+	// Calculate slice size
 	int sliceWidth = imageWidth / w->fieldSize;
 	int sliceHeight = imageHeight / w->fieldSize;
 
@@ -1085,14 +1113,14 @@ void startGame()
 		}
 	}
 
+	// Set n to button #1
+	n = 1;
+
 	// Place buttons to random positions
 	for (y = 0; y < w->fieldSize; y++)
 	{
 		for (x = 0; x < w->fieldSize; x++)
 		{
-			char labelBuffer[8];
-			snprintf(labelBuffer, sizeof(labelBuffer), "%d", n);
-
 			// Check free position
 			do
 			{
@@ -1100,14 +1128,16 @@ void startGame()
 				randomY = rand() % w->fieldSize;
 			} while (!checkFieldFree(randomX, randomY));
 
-			// Set button image
-			//gtk_button_set_label(GTK_BUTTON(w->puzzleButtons[x][y]->button), labelBuffer);
-			GdkPixbuf *currentSlice = gdk_pixbuf_new_subpixbuf(imageBuffer, x * sliceWidth, y * sliceHeight, sliceWidth, sliceHeight);
-			gtk_button_set_image(GTK_BUTTON(w->puzzleButtons[x][y]->button), gtk_image_new_from_pixbuf(currentSlice));
-
-
-
-			//gtk_button_set_image(GTK_BUTTON(w->puzzleButtons[x][y]->button), gtk_image_new_from_pixbuf(imageBuffer));
+			// Set button image / label
+			#if defined PLAY_WITH_IMAGES
+				GdkPixbuf *currentSlice = gdk_pixbuf_new_subpixbuf(imageBuffer, x * sliceWidth, y * sliceHeight, sliceWidth, sliceHeight);
+				gtk_button_set_image(GTK_BUTTON(w->puzzleButtons[x][y]->button), gtk_image_new_from_pixbuf(currentSlice));
+			#else
+				char labelBuffer[8];
+				snprintf(labelBuffer, sizeof(labelBuffer), "%d", n);
+				gtk_button_set_label(GTK_BUTTON(w->puzzleButtons[x][y]->button), labelBuffer);
+				n++;
+			#endif
 
 			// Set button properties
 			w->puzzleButtons[x][y]->currentX = randomX;
@@ -1124,24 +1154,22 @@ void startGame()
 			// Show the button
 			gtk_widget_show(w->puzzleButtons[x][y]->button);
 
-			n++;
+
 		}
 	}
 
 	// Get window width
-	int currentWidth = 0, currentHeight = 0;
-	gtk_window_get_size(GTK_WINDOW(w->window), &currentWidth, &currentHeight);
+	// int currentWidth = 0, currentHeight = 0;
+	// gtk_window_get_size(GTK_WINDOW(w->window), &currentWidth, &currentHeight);
 
-	// Set window height = width + 50
-	gtk_window_resize(GTK_WINDOW(w->window), currentWidth, currentWidth + 50);
+	// Set window height & width to 100. It will be set to the smalest possible size
+	gtk_window_resize(GTK_WINDOW(w->window), 100, 100);
 
 	// Update status bar
 	setStatusBar();
 
 	// Start the timer
 	startTimer();
-
-
 }
 
 // App activate callback
@@ -1153,8 +1181,9 @@ static void activate(GtkApplication *app, gpointer data)
 	w->window = gtk_application_window_new(app);
 	gtk_window_set_application(GTK_WINDOW(w->window), GTK_APPLICATION(app));
 	gtk_window_set_position(GTK_WINDOW(w->window), GTK_WIN_POS_CENTER);
+	gtk_window_set_resizable(GTK_WINDOW(w->window), false);
 	gtk_window_set_title(GTK_WINDOW(w->window), APP_NAME);
-	gtk_window_set_default_size(GTK_WINDOW(w->window), 500, 550);
+	gtk_window_set_default_size(GTK_WINDOW(w->window), 100, 100);
 	gtk_window_set_default_icon_from_file("icon.png", NULL);
 
 	// Create a vertical box
@@ -1182,7 +1211,7 @@ int main (int argc, char **argv)
 	w->difficulty = EASY;
 
 	// Create the application
-	w->app = gtk_application_new("org.gtk.example", G_APPLICATION_FLAGS_NONE);
+	w->app = gtk_application_new("org.gtk.imagepuzzle", G_APPLICATION_FLAGS_NONE);
 	g_signal_connect(w->app, "activate", G_CALLBACK(activate), (gpointer)w);
 	status = g_application_run(G_APPLICATION(w->app), argc, argv);
 

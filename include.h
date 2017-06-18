@@ -17,13 +17,14 @@
 	#include <ctype.h>
 	//#include <fcntl.h>
 
-	#define DEBUG
+	#define PLAY_WITH_IMAGES
+	//#define DEBUG
 	//#define DEBUG2
 
 	#define APP_NAME			"Image Puzzle v1.0"
 	#define APP_COPYRIGHT		"Copyright (C) 2017 by Felix Knobl."
 
-	#define HIGHSCORE_FILE_NAME "imgpuzzle.txt"
+	#define HIGHSCORE_FILE_NAME ".imgpuzzle"
 	#define IMAGES_PATH			"./images/"
 
 	#define MAX_NAME_LENGTH		32
