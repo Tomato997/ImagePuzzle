@@ -388,7 +388,22 @@ void menuQuitCallback(GSimpleAction *action, GVariant *parameter, gpointer data)
 
 void menuAboutCallback(GSimpleAction *action, GVariant *parameter, gpointer data)
 {
+	// Save the state of the timer
+	w->saveTimerStarted = w->timerStarted;
+
+	// Stop the timer if it is running
+	if (w->timerStarted)
+	{
+		stopTimer();
+	}
+
 	showSimpleDialog(APP_COPYRIGHT);
+
+	// Start the timer if it was running
+	if (w->saveTimerStarted)
+	{
+		startTimer();
+	}
 }
 
 static void winDialogOkButtonClicked(GtkWidget *widget, gpointer data)
