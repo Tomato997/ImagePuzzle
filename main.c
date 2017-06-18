@@ -1,4 +1,8 @@
-// clang main.c $(pkg-config --cflags --libs gtk+-3.0) -Wall -g -o main
+///////////////////////////////////////////////////////////
+//   ImagePuzzle v1.0                                    //
+//   ================                                    //
+//   Copyright© 2017 by Felix Knobl, FH Technikum Wien   //
+///////////////////////////////////////////////////////////
 
 #include "include.h"
 
@@ -406,6 +410,17 @@ static void winDialogOkButtonClicked(GtkWidget *widget, gpointer data)
 		return;
 	}
 
+	// Check illegal character '|' (separator)
+	char *charPosition = NULL;
+	charPosition = strchr(nameBuffer, '|');
+
+	// Character found?
+	if (charPosition != NULL)
+	{
+		showSimpleDialog("ERROR: Your name contains the illegal character '|'.");
+		return;
+	}
+
 	// Save highscore
 	FILE *fs = NULL;
 	char *fileName = NULL;
@@ -413,6 +428,7 @@ static void winDialogOkButtonClicked(GtkWidget *widget, gpointer data)
 	// Get the file name of the highscore file
 	fileName = getEnvPathFileName("HOME", "", HIGHSCORE_FILE_NAME);
 
+	// File name valid?
 	if (fileName == NULL)
 	{
 		g_print("ERROR: Could not get highscore filename.\n\n");
@@ -426,6 +442,7 @@ static void winDialogOkButtonClicked(GtkWidget *widget, gpointer data)
 	// Open the file for Append access
 	fs = fopen(fileName, "a");
 
+	// File opened?
 	if (fs == NULL)
 	{
 		g_print("ERROR: Can not append file '%s'.\n\n", fileName);
@@ -452,6 +469,7 @@ static void winDialogOkButtonClicked(GtkWidget *widget, gpointer data)
 	// Free the filename buffer
 	free(fileName);
 
+	// Close the window
 	gtk_window_close(GTK_WINDOW(w->winDialog));
 
 	// Start a new game
@@ -526,6 +544,18 @@ void createMenu()
 
 	menubar = gtk_menu_bar_new_from_model(G_MENU_MODEL(menu));
 	gtk_box_pack_start(GTK_BOX(w->box), menubar, false, false, 0);
+
+	// Define keyboard accelerators
+	const gchar *aboutAccels[2]   = {"F1", NULL};
+	const gchar *restartAccels[2] = {"F2", NULL};
+	const gchar *hsAccels[2]      = {"F3", NULL};
+	const gchar *quitAccels[2]    = {"<Ctrl>Q", NULL};
+
+	// Add keyboard accelerators
+	gtk_application_set_accels_for_action(GTK_APPLICATION(w->app), "app.about", aboutAccels);
+	gtk_application_set_accels_for_action(GTK_APPLICATION(w->app), "app.restart", restartAccels);
+	gtk_application_set_accels_for_action(GTK_APPLICATION(w->app), "app.highscore", hsAccels);
+	gtk_application_set_accels_for_action(GTK_APPLICATION(w->app), "app.quit", quitAccels);
 }
 
 void createGrid()
@@ -543,8 +573,10 @@ void createGrid()
 void createStatusBar()
 {
 	w->statusBar = gtk_statusbar_new();
+
 	gtk_widget_set_size_request(w->statusBar, 500, 10);
 	gtk_box_pack_start(GTK_BOX(w->box), w->statusBar, FALSE, FALSE, 0);
+
 	w->statusID = gtk_statusbar_get_context_id(GTK_STATUSBAR(w->statusBar), "status");
 }
 
@@ -573,6 +605,7 @@ void checkWin()
 	int y = 0;
 	bool win = true;
 
+	// Loop through all buttons and check if their current position equals to their original position
 	for (y = 0; y < w->fieldSize; y++)
 	{
 		for (x = 0; x < w->fieldSize; x++)
@@ -593,6 +626,7 @@ void checkWin()
 
 	if (!win)
 	{
+		// Not won? Nothing to do
 		return;
 	}
 
@@ -643,17 +677,17 @@ void checkWin()
 static void puzzleButtonClicked(GtkWidget *widget, gpointer data)
 {
 	puzzleButton *buttonStruct = (puzzleButton *)data;
-
-	const gchar *text = gtk_button_get_label(GTK_BUTTON(buttonStruct->button));
-
 	w->clicks++;
+
+	// Update status bar
 	setStatusBar();
 
+	// First or secon button clicked?
 	if (!w->firstButtonClicked)
 	{
 		// First button clicked
 		#if defined DEBUG
-			g_print("First button: %s\n", text);
+			g_print("First button: X = %d, Y = %d\n", buttonStruct->currentX, buttonStruct->currentY);
 		#endif
 
 		w->firstButton = buttonStruct;
@@ -663,7 +697,7 @@ static void puzzleButtonClicked(GtkWidget *widget, gpointer data)
 	{
 		// Second button clicked
 		#if defined DEBUG
-			g_print("Second button: %s\n", text);
+			g_print("Second button: X = %d, Y = %d\n\n", buttonStruct->currentX, buttonStruct->currentY);
 		#endif
 
 		w->firstButtonClicked = false;
@@ -675,11 +709,6 @@ static void puzzleButtonClicked(GtkWidget *widget, gpointer data)
 		}
 
 		w->secondButton = buttonStruct;
-
-		#if defined DEBUG
-			g_print("First  button x = %d, y = %d\n", w->firstButton->currentX, w->firstButton->currentY);
-			g_print("Second button x = %d, y = %d\n\n", w->secondButton->currentX, w->secondButton->currentY);
-		#endif
 
 		// Increase the reference count
 		g_object_ref(w->firstButton->button);
@@ -703,14 +732,11 @@ static void puzzleButtonClicked(GtkWidget *widget, gpointer data)
 		gtk_grid_attach(GTK_GRID(w->grid), w->firstButton->button, w->firstButton->currentX, w->firstButton->currentY, 1, 1);
 		gtk_grid_attach(GTK_GRID(w->grid), w->secondButton->button, w->secondButton->currentX, w->secondButton->currentY, 1, 1);
 
+		// Decrease reference count
 		g_object_unref(w->firstButton->button);
 		g_object_unref(w->secondButton->button);
 
-		#if defined DEBUG
-			g_print("First  button x = %d, y = %d\n", w->firstButton->currentX, w->firstButton->currentY);
-			g_print("Second button x = %d, y = %d\n\n", w->secondButton->currentX, w->secondButton->currentY);
-		#endif
-
+		// Check if the player has won
 		checkWin();
 	}
 }
@@ -913,7 +939,7 @@ void startGame()
 			// Append filename to buffer
 			strncat(fileNameBuffer, directoryEntry->d_name, strlen(directoryEntry->d_name));
 
-			// Check if that is a file
+			// Not a regular file?
 			if (!isFile(fileNameBuffer))
 			{
 				continue;
@@ -922,6 +948,7 @@ void startGame()
 			// Create a temporary buffer for the check file extension routine
 			char checkFileNameBuffer[MAX_PATH_LENGTH];
 
+			// Save a copy of the fileNameBuffer
 			strncpy(checkFileNameBuffer, fileNameBuffer, strlen(fileNameBuffer));
 
 			// Check if the pathBuffer contains a file extension
@@ -956,7 +983,7 @@ void startGame()
 				}
 			}
 
-			// File extension valid?
+			// File extension invalid?
 			if (!fileExtensionValid)
 			{
 				continue;
@@ -967,6 +994,8 @@ void startGame()
 
 			if (newFileList == NULL)
 			{
+				// Could not allocate memory?
+				// Ignore the file and continue with the next
 				continue;
 			}
 
@@ -994,7 +1023,6 @@ void startGame()
 	{
 		g_print("ERROR: Could not find images directory.\n\n");
 		exit(-1);
-
 	}
 
 	#if defined DEBUG
@@ -1032,10 +1060,11 @@ void startGame()
 	int imageHeight = 0;
 	int scaleFactor = 0;
 
-	// Get the image size
+	// Get image size
 	imageWidth = gdk_pixbuf_get_width(unscaledImageBuffer);
 	imageHeight = gdk_pixbuf_get_height(unscaledImageBuffer);
 
+	// Check image size
 	if (imageWidth == 0 || imageHeight == 0)
 	{
 		g_print("ERROR: Invalid image size.\n\n");
@@ -1153,8 +1182,6 @@ void startGame()
 
 			// Show the button
 			gtk_widget_show(w->puzzleButtons[x][y]->button);
-
-
 		}
 	}
 
@@ -1162,7 +1189,7 @@ void startGame()
 	// int currentWidth = 0, currentHeight = 0;
 	// gtk_window_get_size(GTK_WINDOW(w->window), &currentWidth, &currentHeight);
 
-	// Set window height & width to 100. It will be set to the smalest possible size
+	// Set window height & width to 100. It will be set to the smallest possible size
 	gtk_window_resize(GTK_WINDOW(w->window), 100, 100);
 
 	// Update status bar
@@ -1205,6 +1232,7 @@ int main (int argc, char **argv)
 {
 	int status;
 
+	// Allocate memory for the widgets
 	w = g_malloc(sizeof(widgets));
 
 	// Set App default settings

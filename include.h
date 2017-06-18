@@ -15,7 +15,6 @@
 	#include <sys/stat.h>
 	#include <unistd.h>
 	#include <ctype.h>
-	//#include <fcntl.h>
 
 	#define PLAY_WITH_IMAGES
 	//#define DEBUG
