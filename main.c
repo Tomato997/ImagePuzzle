@@ -589,7 +589,7 @@ void createStatusBar()
 {
 	w->statusBar = gtk_statusbar_new();
 
-	gtk_widget_set_size_request(w->statusBar, 500, 10);
+	gtk_widget_set_size_request(w->statusBar, 250, 10);
 	gtk_box_pack_start(GTK_BOX(w->box), w->statusBar, FALSE, FALSE, 0);
 
 	w->statusID = gtk_statusbar_get_context_id(GTK_STATUSBAR(w->statusBar), "status");
